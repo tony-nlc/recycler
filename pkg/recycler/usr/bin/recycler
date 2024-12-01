@@ -1,0 +1,172 @@
+#!/bin/bash
+
+VERSION="1.0.0"
+RECYCLE_BIN="$HOME/.recycle_bin"
+RECYCLE_INFO="$RECYCLE_BIN/.info"
+
+# Initialize recycler
+init_recycler() {
+    if [ ! -d "$RECYCLE_BIN" ]; then
+        mkdir -p "$RECYCLE_BIN"
+        touch "$RECYCLE_INFO"
+    fi
+}
+
+# Show usage
+usage() {
+    echo "File Recycler v$VERSION"
+    echo "Usage: $(basename "$0") [options] [files...]"
+    echo ""
+    echo "Options:"
+    echo "  -d, --delete    Delete files to recycle bin"
+    echo "  -l, --list      List files in recycle bin"
+    echo "  -r, --restore   Restore files from recycle bin"
+    echo "  -e, --empty     Empty recycle bin"
+    echo "  -h, --help      Show this help message"
+    echo "  -v, --version   Show version information"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") -d file1.txt file2.txt    # Delete files"
+    echo "  $(basename "$0") -l                        # List recycled files"
+    echo "  $(basename "$0") -r file1.txt              # Restore files"
+    echo "  $(basename "$0") -e                        # Empty recycle bin"
+}
+
+# Delete files
+delete_files() {
+    if [ $# -eq 0 ]; then
+        echo "Error: No files specified for deletion"
+        echo "Usage: $(basename "$0") -d <file1> [file2] ..."
+        exit 1
+    fi
+    file=$1
+    init_recycler
+
+        if [ ! -e "$file" ]; then
+            echo "Error: $file does not exist"
+            exit 1
+        fi
+
+        abs_path=$(realpath "$file")
+        filename=$(basename "$file")
+        timestamp=$(date +%Y%m%d_%H%M%S)
+        unique_name="${timestamp}_${filename}"
+        
+        mv "$file" "$RECYCLE_BIN/$unique_name"
+        echo "$unique_name:$abs_path" >> "$RECYCLE_INFO"
+        echo "Moved '$filename' to recycle bin"
+    
+}
+
+# List deleted files
+list_files() {
+    init_recycler
+    
+    echo "Files in recycle bin:"
+    echo "---------------------"
+    if [ -s "$RECYCLE_INFO" ]; then
+        while IFS=: read -r unique_name original_path; do
+            echo "$unique_name (Originally: $original_path)"
+        done < "$RECYCLE_INFO"
+    else
+        echo "Recycle bin is empty"
+    fi
+}
+
+# Restore files
+restore_files() {
+    if [ $# -eq 0 ]; then
+        echo "Error: No files specified for restoration"
+        echo "Usage: $(basename "$0") -r <file1> [file2] ..."
+        exit 1
+    fi
+
+    init_recycler
+    
+    target=$1
+    entry=$(grep -F "/${target}" "$RECYCLE_INFO" | tail -n 1)
+    if [ -z "$entry" ]; then
+            echo "Error: '$target' not found in recycle bin"
+            exit
+    fi
+        
+    unique_name=$(echo "$entry" | cut -d: -f1)
+    original_path=$(echo "$entry" | cut -d: -f2)
+        
+    dir_path=$(dirname "$original_path")
+    if [ ! -d "$dir_path" ]; then
+        mkdir -p "$dir_path"
+    fi
+        
+    if mv "$RECYCLE_BIN/$unique_name" "$original_path"; then
+        sed -i "\:^$unique_name\::d" "$RECYCLE_INFO"
+        echo "Restored '$target' to original location"
+    else
+        echo "Error restoring '$target'"
+    fi
+    
+}
+
+# Empty recycle bin
+empty_bin() {
+    init_recycler
+    
+    read -p "Are you sure you want to permanently delete all files in recycle bin? (y/n) " confirm
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+        rm -rf "$RECYCLE_BIN"/*
+        echo "" > "$RECYCLE_INFO"
+        echo "Recycle bin emptied"
+    else
+        echo "Operation cancelled"
+    fi
+}
+
+# Main script
+if [ $# -eq 0 ]; then
+    usage
+    exit 1
+fi
+
+# Parse options
+while getopts ":d:lr:ehv" opt; do
+    case $opt in
+        d)
+            delete_files $OPTARG
+            exit 0
+            ;;
+        l)
+            list_files
+            exit 0
+            ;;
+        r)
+            restore_files $OPTARG
+            exit 0
+            ;;
+        e)
+            empty_bin
+            exit 0
+            ;;
+        h)
+            usage
+            exit 0
+            ;;
+        v)
+            echo "File Recycler v$VERSION"
+            exit 0
+            ;;
+        \?)
+            echo "Error: Invalid option -$OPTARG"
+            usage
+            exit 1
+            ;;
+        :)
+            echo "Error: Option -$OPTARG requires an argument"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# If we get here, no valid options were provided
+usage
+exit 1
