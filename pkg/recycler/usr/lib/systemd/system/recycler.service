@@ -1,8 +1,0 @@
-[Unit]
-Description=Clean Recycler
-
-[Service]
-ExecStart=/usr/bin/recycler -e
-
-[Install]
-WantedBy=multi-user.target

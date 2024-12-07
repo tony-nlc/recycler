@@ -2,6 +2,7 @@
 Description=Clean Recycler
 
 [Service]
+Type=oneshot
 ExecStart=/usr/bin/recycler -e
 
 [Install]

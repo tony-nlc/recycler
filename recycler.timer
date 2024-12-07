@@ -2,7 +2,7 @@
 Description=Clean Recycler every the first day of month
 
 [Timer]
-OnCalendar=*-*-1 00:00:00
+OnCalendar=monthly
 Persistent=true
 
 [Install]
